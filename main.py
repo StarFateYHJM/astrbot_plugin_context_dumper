@@ -21,15 +21,13 @@ class ContextDumper(Star):
     
     @filter.command("dump")
     async def cmd_dump(self, event: AstrMessageEvent):
-        """一键导出当前会话完整上下文"""
-        
-        conv_manager = self.context.get_conversation_manager()
+        conv_manager = self.context.conversation_manager
         session_id = event.message_obj.session_id
         
         try:
             context_list = await conv_manager.get_context(session_id)
-        except:
-            yield event.plain_result("❌ 获取上下文失败")
+        except Exception as e:
+            yield event.plain_result(f"❌ 获取上下文失败: {e}")
             return
         
         if not context_list:
