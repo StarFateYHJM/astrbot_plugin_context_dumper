@@ -3,7 +3,6 @@ from datetime import datetime
 
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
 
 
 @register(
@@ -22,16 +21,20 @@ class ContextDumper(Star):
     @filter.command("dump")
     async def cmd_dump(self, event: AstrMessageEvent):
         conv_manager = self.context.conversation_manager
-        session_id = event.message_obj.session_id
         
-        try:
-            context_list = await conv_manager.get_context(session_id)
-        except Exception as e:
-            yield event.plain_result(f"❌ 获取上下文失败: {e}")
+        # 尝试从 session 获取对话历史
+        session_id = event.message_obj.session_id
+        session = conv_manager.get_session(session_id)
+        
+        if not session:
+            yield event.plain_result("❌ 未找到会话上下文")
             return
         
-        if not context_list:
-            yield event.plain_result("❌ 当前会话无上下文")
+        # 从 session 中获取消息列表
+        messages = session.messages if hasattr(session, 'messages') else []
+        
+        if not messages:
+            yield event.plain_result("❌ 当前会话无上下文消息")
             return
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -41,14 +44,14 @@ class ContextDumper(Star):
         lines = [
             f"会话ID: {session_id}",
             f"导出时间: {datetime.now()}",
-            f"消息数量: {len(context_list)}",
+            f"消息数量: {len(messages)}",
             "=" * 50,
             ""
         ]
         
-        for i, msg in enumerate(context_list, 1):
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
+        for i, msg in enumerate(messages, 1):
+            role = msg.get("role", "unknown") if isinstance(msg, dict) else getattr(msg, "role", "unknown")
+            content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
             lines.append(f"[{i}] [{role}]")
             lines.append(content)
             lines.append("-" * 40)
@@ -56,4 +59,4 @@ class ContextDumper(Star):
         
         filepath.write_text("\n".join(lines), encoding="utf-8")
         
-        yield event.plain_result(f"✅ 已导出 {len(context_list)} 条消息\n📁 {filepath}")
+        yield event.plain_result(f"✅ 已导出 {len(messages)} 条消息\n📁 {filepath}")
