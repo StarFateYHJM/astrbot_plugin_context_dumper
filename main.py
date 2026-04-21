@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -20,29 +21,48 @@ class ContextDumper(Star):
     
     @filter.command("dump")
     async def cmd_dump(self, event: AstrMessageEvent):
-        conv_manager = self.context.conversation_manager
+        # 获取统一会话标识
+        uid = event.unified_msg_origin
         
-        # 尝试从 session 获取对话历史
-        session_id = event.message_obj.session_id
-        session = conv_manager.get_session(session_id)
+        # 获取对话管理器
+        conv_mgr = self.context.conversation_manager
         
-        if not session:
-            yield event.plain_result("❌ 未找到会话上下文")
+        # 获取当前对话 ID
+        curr_cid = await conv_mgr.get_curr_conversation_id(uid)
+        if not curr_cid:
+            yield event.plain_result("❌ 当前没有活跃对话")
             return
         
-        # 从 session 中获取消息列表
-        messages = session.messages if hasattr(session, 'messages') else []
+        # 获取完整对话对象
+        conversation = await conv_mgr.get_conversation(uid, curr_cid)
+        if not conversation:
+            yield event.plain_result("❌ 获取对话失败")
+            return
+        
+        # 解析对话历史
+        history_str = conversation.history
+        if not history_str:
+            yield event.plain_result("❌ 对话历史为空")
+            return
+        
+        try:
+            messages = json.loads(history_str)
+        except:
+            yield event.plain_result("❌ 解析对话历史失败")
+            return
         
         if not messages:
-            yield event.plain_result("❌ 当前会话无上下文消息")
+            yield event.plain_result("❌ 无对话消息")
             return
         
+        # 保存到文件
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"context_{session_id.replace(':', '_')}_{timestamp}.txt"
+        filename = f"context_{timestamp}.txt"
         filepath = self.output_dir / filename
         
         lines = [
-            f"会话ID: {session_id}",
+            f"会话ID: {curr_cid}",
+            f"用户标识: {uid}",
             f"导出时间: {datetime.now()}",
             f"消息数量: {len(messages)}",
             "=" * 50,
@@ -50,8 +70,8 @@ class ContextDumper(Star):
         ]
         
         for i, msg in enumerate(messages, 1):
-            role = msg.get("role", "unknown") if isinstance(msg, dict) else getattr(msg, "role", "unknown")
-            content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
             lines.append(f"[{i}] [{role}]")
             lines.append(content)
             lines.append("-" * 40)
