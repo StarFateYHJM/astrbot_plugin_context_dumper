@@ -1,0 +1,4 @@
+name: astrbot_plugin_context_dumper
+author: Starfate
+version: 1.0.0
+desc: 上下文导出工具 - 一键导出当前会话完整上下文
